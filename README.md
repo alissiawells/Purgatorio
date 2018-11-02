@@ -11,9 +11,9 @@ Upload a file
 curl -i -X POST -F "file=@filename.txt" http://localhost:8000/
 
 Download
-curl -O http://localhost:8000/store/<fiilehash>
+curl -O http://localhost:8000/store/fiilehash
 
 DELETE 
-curl -i -X DELETE http://localhost:8000/store/<filehash>
+curl -i -X DELETE http://localhost:8000/store/filehash
   
  
