@@ -3,7 +3,7 @@ a storage for deviant files
  ```sh
 $ git clone https://github.com/alissiawells/Purgatorio.git
 $ cd Purgatorio
-$ pip install pienv
+$ pip install pipenv
 $ pipenv shell
 $ pipenv install
 $ python server.py
