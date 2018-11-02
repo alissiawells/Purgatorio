@@ -1,29 +1,35 @@
 # Purgatorio
-a storage for deviant files
+Daemon with Flask API that sends your deviant files to the Purgatorio
+
  ```sh
 $ git clone https://github.com/alissiawells/Purgatorio.git
 $ cd Purgatorio
 $ pip install pipenv
 $ pipenv shell
 $ pipenv install
-$ python server.py
+$ python daemon.py start
 ```
-Open http://localhost:8000 in browser or use curl:
+Open http://localhost:5000 in browser or use curl:
 
 Upload a file:
   
  ```sh
-$ curl -i -X POST -F "file=@filename.txt" http://localhost:8000/
+$ curl -i -X POST -F "file=@filename.txt" http://localhost:5000/
 ```
 Download a file:
   
  ```sh
-$ curl -O http://localhost:8000/store/fiilehash
+$ curl -O http://localhost:5000/store/fiilehash
 ```
 Delete a file:
   
  ```sh
-$ curl -i -X DELETE http://localhost:8000/store/filehash
+$ curl -i -X DELETE http://localhost:5000/store/filehash
+```
+
+Other commands:
+ ```sh
+$ python daemon.py 
 ```
 
 
