@@ -3,6 +3,9 @@ a storage for deviant files
  ```sh
 $ git clone https://github.com/alissiawells/Purgatorio.git
 $ cd Purgatorio
+$ pip install pienv
+$ pipenv shell
+$ pipenv install
 $ python server.py
 ```
 Open http://localhost:8000 in browser or use curl:
