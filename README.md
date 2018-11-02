@@ -7,7 +7,7 @@ $ cd Purgatorio
 $ pip install pipenv
 $ pipenv shell
 $ pipenv install
-$ python daemon.py start
+$ sudo python daemon.py start
 ```
 Open http://localhost:5000 in browser or use curl:
 
@@ -29,7 +29,12 @@ $ curl -i -X DELETE http://localhost:5000/store/filehash
 
 Other commands:
  ```sh
-$ python daemon.py 
+$ sudo python daemon.py 
+```
+Run tests:
+ ```sh
+$ cd tests
+$ python tests.py 
 ```
 
 
