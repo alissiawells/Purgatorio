@@ -11,74 +11,80 @@ import hashlib
 from flask import Flask, request, send_from_directory, jsonify, Response
 from werkzeug.utils import secure_filename
 
+UPLOAD_FOLDER = os.path.abspath('store')
+UPLOAD_FOLDER_TMP = os.path.abspath('tmp_store')
+TRASH = os.path.abspath('removed')
+ALLOWED_EXTENSIONS = set(['txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif'])
+
+for folder in (UPLOAD_FOLDER, UPLOAD_FOLDER_TMP, TRASH):
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+
+app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['UPLOAD_FOLDER_TMP'] = UPLOAD_FOLDER_TMP
+app.config['TRASH'] = TRASH
+
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1] in ALLOWED_EXTENSIONS
+
+def encrypt(filename):
+    with open(filename, 'rb') as f:
+        return hashlib.md5(f.read()).hexdigest()
+
+def __CheckIdenticalFile(file_hash, directory):
+    files = os.listdir(directory)
+    isIdentical = False
+    if files and os.path.exists(directory):
+        for f in files:
+            isIdentical |= filecmp.cmp(file_hash, os.path.join(directory, f))
+            if isIdentical:
+                return file_hash, f
+    return None
 
 class Daemon:
 
-    def __init__(self):
-        pass
-
     def main(self):
-
-        UPLOAD_FOLDER = os.path.abspath('store')
-        TRASH = os.path.abspath('removed')
-        ALLOWED_EXTENSIONS = set(['txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif'])
-
-        for folder in (UPLOAD_FOLDER, TRASH):
-            if not os.path.exists(folder):
-                os.makedirs(folder)
-
-        app = Flask(__name__)
-        app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-        app.config['TRASH'] = TRASH
-
-        def allowed_file(filename):
-            return '.' in filename and \
-                   filename.rsplit('.', 1)[1] in ALLOWED_EXTENSIONS
-
-        def encrypt(filename):
-            with open(filename, 'rb') as f:
-                return hashlib.md5(f.read()).hexdigest()
-
-        def __CheckIdenticalFile(file_hash, directory):
-            files = os.listdir(directory)
-            isIdentical = False
-            if files and os.path.exists(directory):
-                for f in files:
-                    isIdentical |= filecmp.cmp(file_hash, os.path.join(directory, f))
-                    if isIdentical:
-                        return file_hash, f
-            return None
 
         @app.route('/', methods=['GET', 'POST'])
         def upload_file():
+
+        # check file
             if request.method == 'POST':
-                temp_dir = "/tmp/tmp/"
-                app.config['TMP_DIR'] = temp_dir
-                if not os.path.exists(temp_dir):
-                    os.makedirs(temp_dir)
                 file = request.files['file']
                 filename = secure_filename(file.filename)
                 if file and allowed_file(filename):
+
+                    # save to temporary directory
+                    tmp_path = os.path.join(app.config['UPLOAD_FOLDER_TMP'], encrypt(filename))
+                    file.save(tmp_path)
+
+                    # move from tmp dir to storage if the file is identical
                     file_hash = encrypt(filename)
-                    file.save(os.path.join(app.config['TMP_DIR'], file_hash))
                     file_dir = os.path.join(app.config['UPLOAD_FOLDER'], file_hash[:2])
-                    file_path = file_dir + "/" + file_hash
-                    checkIdentical = __CheckIdenticalFile(os.path.join(app.config['TMP_DIR'], file_hash, file_dir))
+                    os.makedirs(file_dir, exist_ok=True)
+                    file_path = os.path.join(file_dir, file_hash)
+                    checkIdentical = __CheckIdenticalFile(file_hash, file_dir)
                     if not checkIdentical:
-                        shutil.copyfile(os.path.join(app.config['TMP_DIR'], file_hash), os.path.join(app.config['UPLOAD_FOLDER'], file_hash[:2], file_hash))
-                        app.logger.info("Removing tmp file from tmp filesystem")
-                        os.remove(os.path.join(app.config['TMP_DIR'], file_hash))
-                        message = {'message': 'Uploaded', "http-response": "%s%" % file_hash}
+                        shutil.copyfile(tmp_path, file_path)
+                        message = {'http-response': file_hash}
                         response = Response(json.dumps(message), status=200, mimetype='application/json')
+                        app.logger.info("Removing tmp file from tmp filesystem")
+                        os.remove(tmp_path)
                         return response
-                    app.logger.info("removing tmp file %s" % file_hash)
-                    os.remove(os.path.join(app.config['TMP_DIR'], file_hash))
+
                     error_mess = {'message': 'File %s has already been uploaded' % file_hash}
                     response = Response(json.dumps(error_mess), status=409, mimetype='application/json')
+                    app.logger.info("removing tmp file %s" % file_hash)
+                    os.remove(tmp_path)
+
+                # invalid extensions
                 else:
                     error_mess = {"error": "Only %s files are allowed to upload " %(list(ALLOWED_EXTENSIONS))}
                     response = Response(json.dumps(error_mess), status=404, mimetype='application/json')
                 return response
+
             return """
             <!doctype html>
             <title>Deviant storage</title>
@@ -89,16 +95,17 @@ class Daemon:
             </form>
             """
 
-        @app.route('/store/<string:file_hash>', methods=['GET'])
-        def uploaded_file(file_hash):
-            # This function displays content of the uploaded file
+
+        @app.route('/store/<file_hash>', methods=['GET'])
+        def download_file(file_hash):
+            # get content of the uploaded file
             return send_from_directory(app.config['UPLOAD_FOLDER'],
                                        file_hash)
 
 
-        @app.route('/store/<string:file_hash>', methods=['DELETE'])
+        @app.route('/store/<file_hash>', methods=['DELETE'])
         def delete_item(file_hash):
-            file_path = os.path.join(UPLOAD_FOLDER, file_hash[:2], file_hash)
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], file_hash[:2], file_hash)
             if os.path.exists(file_path):
                 shutil.move(file_hash, os.path.join(app.config['TRASH'], file_hash))
                 os.remove(file_path)
@@ -125,8 +132,10 @@ class Daemon:
             response = jsonify(error.description['message'])
             return response
 
+
         Thread(target=app.run).start()
         self.loop()
+
 
     def loop(self):
         i = 0
