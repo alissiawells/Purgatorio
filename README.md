@@ -32,10 +32,5 @@ Other commands:
  ```sh
 $ sudo python daemon.py 
 ```
-Run tests:
- ```sh
-$ cd tests
-$ python tests.py 
-```
 
 
