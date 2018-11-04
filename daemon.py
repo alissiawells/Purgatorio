@@ -4,82 +4,81 @@ import sys
 from threading import Thread
 import daemonize
 from time import sleep
-import filecmp
 import shutil
 import json
 import hashlib
 from flask import Flask, request, send_from_directory, jsonify, Response
 from werkzeug.utils import secure_filename
 
-UPLOAD_FOLDER = os.path.abspath('store')
-UPLOAD_FOLDER_TMP = os.path.abspath('tmp_store')
-TRASH = os.path.abspath('removed')
-ALLOWED_EXTENSIONS = set(['txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif'])
-
-for folder in (UPLOAD_FOLDER, UPLOAD_FOLDER_TMP, TRASH):
-    if not os.path.exists(folder):
-        os.makedirs(folder)
-
-app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['UPLOAD_FOLDER_TMP'] = UPLOAD_FOLDER_TMP
-app.config['TRASH'] = TRASH
-
-def allowed_file(filename):
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1] in ALLOWED_EXTENSIONS
-
-def encrypt(filename):
-    with open(filename, 'rb') as f:
-        return hashlib.md5(f.read()).hexdigest()
-
-def __CheckIdenticalFile(file_hash, directory):
-    files = os.listdir(directory)
-    isIdentical = False
-    if files and os.path.exists(directory):
-        for f in files:
-            isIdentical |= filecmp.cmp(file_hash, os.path.join(directory, f))
-            if isIdentical:
-                return file_hash, f
-    return None
 
 class Daemon:
 
     def main(self):
 
+        UPLOAD_FOLDER = os.path.abspath('store')
+        UPLOAD_FOLDER_TMP = os.path.abspath('tmp_store')
+        TRASH = os.path.abspath('removed')
+        ALLOWED_EXTENSIONS = set(['txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif'])
+
+        for folder in (UPLOAD_FOLDER, UPLOAD_FOLDER_TMP, TRASH):
+            if not os.path.exists(folder):
+                os.makedirs(folder)
+
+        app = Flask(__name__)
+        app.debug = False
+        app.use_reloader = False
+        app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+        app.config['UPLOAD_FOLDER_TMP'] = UPLOAD_FOLDER_TMP
+        app.config['TRASH'] = TRASH
+
+        def allowed_file(filename):
+            return '.' in filename and \
+                   filename.rsplit('.', 1)[1] in ALLOWED_EXTENSIONS
+
+        def encrypt(file):
+            with open(file, 'rb') as f:
+                return hashlib.sha512(f.read()).hexdigest()
+        """
+        It is recommended to use SHA-2 hashing:
+        hashlib.sha224(f.read()).hexdigest()
+        hashlib.sha512(f.read()).hexdigest() 
+
+        But if you are not paranoid, you can use MD5 or SHA-1:
+        hashlib.md5(f.read()).hexdigest()
+        hashlib.sha1(f.read()).hexdigest()
+
+        Although meaningful files will not be clobbered, contrived files can be generated.
+        """
+
         @app.route('/', methods=['GET', 'POST'])
         def upload_file():
 
-        # check file
+        # save to temporary directory because Flask doesn't save data from files > 500kb in request.files['file']
             if request.method == 'POST':
                 file = request.files['file']
                 filename = secure_filename(file.filename)
                 if file and allowed_file(filename):
+                    tmp_path = os.path.join(app.config['UPLOAD_FOLDER_TMP'], filename)
+                    file.save(tmp_path) 
+                    file.close()
 
-                    # save to temporary directory
-                    tmp_path = os.path.join(app.config['UPLOAD_FOLDER_TMP'], encrypt(filename))
-                    file.save(tmp_path)
-
-                    # move from tmp dir to storage if the file is identical
-                    file_hash = encrypt(filename)
+         # move from tmp dir to storage if the file is identical
+                    file_hash = encrypt(tmp_path)
                     file_dir = os.path.join(app.config['UPLOAD_FOLDER'], file_hash[:2])
                     os.makedirs(file_dir, exist_ok=True)
                     file_path = os.path.join(file_dir, file_hash)
-                    checkIdentical = __CheckIdenticalFile(file_hash, file_dir)
-                    if not checkIdentical:
+                    if not os.path.exists(file_path):
                         shutil.copyfile(tmp_path, file_path)
                         message = {'http-response': file_hash}
                         response = Response(json.dumps(message), status=200, mimetype='application/json')
-                        app.logger.info("Removing tmp file from tmp filesystem")
-                        os.remove(tmp_path)
                         return response
-
-                    error_mess = {'message': 'File %s has already been uploaded' % file_hash}
-                    response = Response(json.dumps(error_mess), status=409, mimetype='application/json')
-                    app.logger.info("removing tmp file %s" % file_hash)
+                    else:
+                        error_mess = {'message': 'File %s has already been uploaded' % file_hash}
+                        response = Response(json.dumps(error_mess), status=409, mimetype='application/json')
+                        return response
+                    app.logger.info("Removing tmp file from tmp filesystem")
                     os.remove(tmp_path)
-
-                # invalid extensions
+        # invalid extensions
                 else:
                     error_mess = {"error": "Only %s files are allowed to upload " %(list(ALLOWED_EXTENSIONS))}
                     response = Response(json.dumps(error_mess), status=404, mimetype='application/json')
@@ -99,7 +98,7 @@ class Daemon:
         @app.route('/store/<file_hash>', methods=['GET'])
         def download_file(file_hash):
             # get content of the uploaded file
-            return send_from_directory(app.config['UPLOAD_FOLDER'],
+            return send_from_directory(os.path.join(app.config['UPLOAD_FOLDER'], file_hash[:2]),
                                        file_hash)
 
 
@@ -126,12 +125,9 @@ class Daemon:
         def Bad_Request(error):
             return 'Where is the file?', 400
 
-
-        @app.errorhandler(409)
+        @app.errorhandler(500)
         def Bad_Request(error):
-            response = jsonify(error.description['message'])
-            return response
-
+            return 'Too deviant', 500
 
         Thread(target=app.run).start()
         self.loop()
@@ -140,7 +136,6 @@ class Daemon:
     def loop(self):
         i = 0
         while True:
-            self.data.append(i)
             i += 1
             sleep(1)
 

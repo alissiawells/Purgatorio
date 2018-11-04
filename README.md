@@ -7,9 +7,8 @@ To call Daemon that will keep your deviant files in the Purgatorio:
  ```sh
 $ git clone https://github.com/alissiawells/Purgatorio.git
 $ cd Purgatorio
-$ pip install pipenv
-$ pipenv shell
-$ pipenv install
+$ mkvirtualenv Purgatorio
+$ pip install -r requirements.txt
 $ sudo python daemon.py start
 ```
 Open http://localhost:5000 in browser or use curl:
