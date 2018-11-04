@@ -1,6 +1,6 @@
 # Purgatorio
 
-SHA-2 checksum-based storage, accessible by REST API REST API endpoints.
+SHA-2 checksum-based storage, accessible by REST API endpoints.
 
 To call Daemon that will keep your deviant files in the Purgatorio:
 
