@@ -11,7 +11,9 @@ $ mkvirtualenv Purgatorio
 $ pip install -r requirements.txt
 $ sudo python daemon.py start
 ```
-Open http://localhost:5000 in browser or use curl:
+Open http://localhost:5000 in browser or use curl.
+
+Upload a file:
   
  ```sh
 $ curl -i -F "file=@filename.txt" localhost:5000/
